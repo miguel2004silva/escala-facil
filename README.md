@@ -9,11 +9,28 @@ Aplicativo de gestão de escalas ministeriais construído com Expo (React Native
 - **React Navigation**
 - **Async Storage**
 
-## 🏗 Arquitetura
+## 🏗 Documentação Técnica da Arquitetura e Padrões de Projeto
 
 O projeto utiliza uma arquitetura baseada na junção de **Clean Architecture** e **MVVM** (Model-View-ViewModel), com o objetivo principal de isolar completamente as regras de negócio da camada de apresentação e da infraestrutura.
 
-Para uma documentação detalhada sobre as camadas, fluxo de dados e decisões arquiteturais, consulte o documento completo: [Arquitetura e Padrões](./docs/arquitetura.md).
+Os principais padrões de projeto utilizados incluem:
+- **Clean Architecture & MVVM:** Divisão de responsabilidades entre Apresentação, Domínio e Dados.
+- **Repository Pattern:** Abstrai a persistência e busca de dados, permitindo a fácil troca de fontes de dados.
+- **Use Case Pattern:** Encapsula regras de negócio individuais, garantindo o Princípio da Responsabilidade Única (SOLID).
+- **Dependency Injection (Factories):** Cumpre o Princípio da Inversão de Dependência, configurando a injeção manualmente na camada principal.
+
+### 🔄 Evolução Arquitetural e Integração de Dados
+
+Graças à aplicação rigorosa do **Repository Pattern**, a arquitetura está totalmente preparada para evolução e integração com APIs externas (ex: APIs REST, Firebase, etc). Como os Casos de Uso dependem apenas de contratos (Interfaces) e não de implementações concretas, a transição do armazenamento atual (dados em memória e offline-first via AsyncStorage) para consumo em serviços remotos na nuvem acontece **sem a necessidade de alterar uma única linha de código nas camadas de UI ou de Domínio**.
+
+### 🛡️ Resiliência e Tratamento de Erros
+
+A resiliência é um dos focos centrais da aplicação:
+- **Tratamento Global de Erros:** Exceções controladas através da classe padronizada `AppError`.
+- **Prevenção de Crashes na UI:** Os `ViewModels` envelopam e gerenciam as comunicações com o domínio através de blocos `try/catch`. 
+- **Recuperação e Fallbacks:** Em caso de falha na integração ou perda de rede, a interface do usuário exibe um estado de erro reativo e fornece mecanismos de recuperação (ex: botões de "Tentar Novamente"), mantendo a estabilidade geral da aplicação.
+
+Para a documentação mais aprofundada sobre as camadas e o fluxo de dados, consulte o documento anexo: [Arquitetura e Padrões Completos](./docs/arquitetura.md).
 
 ## 📂 Estrutura de Pastas
 
