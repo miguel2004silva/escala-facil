@@ -1,11 +1,20 @@
 export const colors = {
-  primary: '#0F52BA',     // Azul Safira
-  secondary: '#FF9F1C',   // Laranja
-  background: '#F8F9FA',  // Cinza muito claro
-  surface: '#FFFFFF',     // Branco
-  text: '#212529',        // Quase preto
-  textSecondary: '#6C757D',// Cinza
-  border: '#DEE2E6',      // Cinza claro para bordas
-  error: '#E63946',       // Vermelho
-  success: '#2A9D8F',     // Verde
+  primary: '#4F46E5',       // Indigo moderno (Tailwind Indigo-600)
+  primaryLight: '#EEF2FF',  // Indigo suave para fundos (Tailwind Indigo-50)
+  primaryDark: '#3730A3',   // Indigo escuro para botões ativos (Tailwind Indigo-800)
+  secondary: '#F59E0B',     // Âmbar moderno (Tailwind Amber-500)
+  secondaryLight: '#FEF3C7',// Âmbar suave para badges (Tailwind Amber-100)
+  background: '#F9FAFB',    // Cinza claro para fundo (Tailwind Gray-50)
+  surface: '#FFFFFF',       // Branco para cards e superfícies
+  text: '#111827',          // Quase preto para leitura confortável (Tailwind Gray-900)
+  textSecondary: '#4B5563', // Cinza médio para textos secundários (Tailwind Gray-600)
+  textMuted: '#9CA3AF',     // Cinza claro para placeholders/dicas (Tailwind Gray-400)
+  border: '#E5E7EB',        // Borda cinza suave padrão (Tailwind Gray-200)
+  borderLight: '#F3F4F6',   // Borda ainda mais suave para tabelas/divisórias (Tailwind Gray-100)
+  error: '#EF4444',         // Vermelho moderno para alertas (Tailwind Red-500)
+  errorLight: '#FEE2E2',    // Vermelho suave para fundo de alertas (Tailwind Red-100)
+  success: '#10B981',       // Verde esmeralda moderno para status (Tailwind Emerald-500)
+  successLight: '#D1FAE5',  // Verde suave para fundo de status (Tailwind Emerald-100)
+  info: '#3B82F6',          // Azul moderno para dicas/banners (Tailwind Blue-500)
+  infoLight: '#DBEAFE',     // Azul suave para fundo de dicas (Tailwind Blue-100)
 };

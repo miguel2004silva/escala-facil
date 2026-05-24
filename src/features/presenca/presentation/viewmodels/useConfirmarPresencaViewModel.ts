@@ -6,11 +6,11 @@ import { Alert } from 'react-native';
 export function useConfirmarPresencaViewModel(confirmarUseCase: ConfirmarPresencaUseCase) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  const confirmar = async (escalaId: string, membroId: string, confirmar: boolean, onSuccess?: () => void) => {
+  const confirmar = async (escalaId: string, membroId: string, confirmar: boolean, justificativa?: string, onSuccess?: () => void) => {
     try {
       setLoadingId(escalaId);
-      await confirmarUseCase.execute(escalaId, membroId, confirmar);
-      Alert.alert('Sucesso', confirmar ? 'Presença confirmada!' : 'Ausência justificada.');
+      await confirmarUseCase.execute(escalaId, membroId, confirmar, justificativa);
+      Alert.alert('Sucesso', confirmar ? 'Presença confirmada!' : 'Ausência justificada com sucesso.');
       if (onSuccess) onSuccess();
     } catch (err: any) {
       if (err instanceof AppError) {
