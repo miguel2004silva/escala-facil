@@ -12,6 +12,19 @@ Aplicativo de gestão de escalas ministeriais construído com Expo (React Native
 
 ---
 
+## 🗄️ Estrutura do Banco de Dados (Supabase)
+
+O projeto está totalmente integrado com uma instância em nuvem do **Supabase (PostgreSQL)** em tempo real. A configuração de conexão está localizada em `src/main/config/supabase.ts`.
+
+As seguintes tabelas e estruturas são utilizadas para a persistência e relacionamento dos dados:
+
+- **`profiles`**: Armazena os perfis dos usuários cadastrados na plataforma. É utilizada para autenticação, controle de permissões (`role`: `admin` ou `user`) e para listar membros reais cadastrados no seletor de escalas.
+- **`escalas`**: Armazena os dados dos eventos criados, incluindo `id` (UUID), `grupo` (nome do ministério), `data` (timestamp com fuso-horário) e `publicada` (booleano que indica se o rascunho já está visível para a equipe).
+- **`membros_escala`**: Tabela associativa que vincula membros a cada escala (`escala_id`). Contém o `id` do usuário vinculado, `nome`, `funcao` (instrumento ou papel desempenhado), `status` (*Pendente*, *Confirmado* ou *Ausente*) e a `justificativa` textual (preenchida caso o membro marque que não pode comparecer).
+- **`grupos`**: Lista de ministérios e grupos cadastrados dinamicamente (ex: Som, Mídia, Vocal, Recepção).
+
+---
+
 ## ⚙️ Funcionalidades Implementadas e Operantes
 
 ### 🔑 Autenticação e Perfis (Auth Feature)
