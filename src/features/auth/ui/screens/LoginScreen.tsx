@@ -107,11 +107,11 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           </TouchableOpacity>
 
           <View style={styles.hintContainer}>
-            <Ionicons name="information-circle-outline" size={20} color={colors.info} />
+            <Ionicons name="book-outline" size={20} color={colors.primary} />
             <View style={styles.hintTextWrapper}>
-              <Text style={styles.hintTitle}>Acesso de Teste:</Text>
+              <Text style={styles.hintTitle}>Versículo do Dia:</Text>
               <Text style={styles.hintText}>
-                Use <Text style={styles.hintHighlight}>admin@escala.com</Text> ou <Text style={styles.hintHighlight}>user@escala.com</Text> com a senha <Text style={styles.hintHighlight}>123456</Text>
+                "Servi uns aos outros conforme o dom que cada um recebeu, como bons despenseiros da multiforme graça de Deus." — <Text style={styles.hintHighlight}>1 Pedro 4:10</Text>
               </Text>
             </View>
           </View>
@@ -242,12 +242,12 @@ const styles = StyleSheet.create({
   },
   hintContainer: {
     flexDirection: 'row',
-    backgroundColor: colors.infoLight,
+    backgroundColor: colors.primaryLight,
     borderRadius: 16,
     padding: 16,
     marginTop: 28,
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.15)',
+    borderColor: 'rgba(79, 70, 229, 0.15)',
   },
   hintTextWrapper: {
     marginLeft: 10,
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
   hintTitle: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: colors.info,
+    color: colors.primary,
     marginBottom: 2,
   },
   hintText: {

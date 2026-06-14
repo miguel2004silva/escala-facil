@@ -39,9 +39,13 @@ O projeto está integrado a uma base de dados relacional **PostgreSQL** no Supab
 
 ## ⚙️ Funcionalidades e Arquitetura de Negócio
 
-### 1. Sistema de Notificações em Tempo Real (Realtime Push)
-Quando um administrador adiciona um membro a uma escala publicada, ou altera uma escala existente de "Rascunho" para "Publicada", o membro escalado recebe uma notificação na barra de tarefas do celular instantaneamente.
-- **Implementação Técnica**: Hook [useNotificationListener.ts](file:///c:/Users/migue/Downloads/escala-facil/src/core/hooks/useNotificationListener.ts) assinado via cliente Realtime Supabase nos canais `membros_escala` (INSERT) e `escalas` (UPDATE). Ao interceptar as mudanças no banco onde o ID do membro coincide com o usuário logado no aparelho, o app solicita permissão no sistema operacional e dispara a notificação local via `expo-notifications`.
+### 1. Sincronização e Notificações em Tempo Real (Realtime Sync & Push)
+Quando um administrador adiciona um membro a uma escala publicada, altera uma escala de "Rascunho" para "Publicada", ou cadastra a cor da vestimenta:
+1. A interface de todos os usuários logados no aplicativo é atualizada **automaticamente em tempo real** sem a necessidade de atualizar ou reabrir a tela.
+2. O usuário escalado recebe uma notificação na barra de tarefas do celular (Android/iOS) ou um alerta de navegador instantâneo caso esteja testando a aplicação na Web.
+- **Implementação Técnica**: 
+  - **Reatividade da Interface**: No [EscalasScreen.tsx](file:///c:/Users/migue/Downloads/escala-facil/src/features/escala/ui/screens/EscalasScreen.tsx), implementamos uma inscrição direta aos canais do Supabase Realtime escutando eventos nas tabelas `escalas`, `membros_escala` e `cores_roupa`. Qualquer alteração dispara a atualização local automática dos dados da tela.
+  - **Notificações Flexíveis**: O hook [useNotificationListener.ts](file:///c:/Users/migue/Downloads/escala-facil/src/core/hooks/useNotificationListener.ts) escuta eventos de `INSERT` em `membros_escala` e `UPDATE` em `escalas`. Adicionamos um delay estratégico de 1 segundo para contornar condições de corrida durante a gravação sequencial dos dados e tratamos a compatibilidade de plataformas: exibe notificações nativas no mobile com `expo-notifications` e alertas de navegador (alert) em ambiente Web.
 
 ### 2. Cadastro de Novos Usuários por Administradores (sem Rate Limits)
 O administrador pode registrar novos membros no aplicativo (Nome, E-mail, Senha e Role/Perfil) a partir da aba "Membros".
