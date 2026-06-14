@@ -9,6 +9,7 @@ import { DeleteGrupoUseCase } from '../../domain/usecases/DeleteGrupoUseCase';
 import { AppError } from '../../../../core/errors/AppError';
 import { User } from '../../../auth/domain/entities/User';
 import { GetUsersUseCase } from '../../../auth/domain/usecases/GetUsersUseCase';
+import { RegisterUserUseCase } from '../../../auth/domain/usecases/RegisterUserUseCase';
 
 export function useEscalasViewModel(
   getEscalasUseCase: GetEscalasUseCase,
@@ -17,7 +18,8 @@ export function useEscalasViewModel(
   getGruposUseCase: GetGruposUseCase,
   saveGrupoUseCase: SaveGrupoUseCase,
   deleteGrupoUseCase: DeleteGrupoUseCase,
-  getUsersUseCase: GetUsersUseCase
+  getUsersUseCase: GetUsersUseCase,
+  registerUserUseCase: RegisterUserUseCase
 ) {
   const [escalas, setEscalas] = useState<Escala[]>([]);
   const [grupos, setGrupos] = useState<string[]>([]);
@@ -128,6 +130,28 @@ export function useEscalasViewModel(
     }
   }, [getUsersUseCase]);
 
+  const registerUser = async (
+    currentUser: User | null,
+    name: string,
+    email: string,
+    password: string,
+    role: 'admin' | 'user'
+  ) => {
+    try {
+      setLoading(true);
+      setError(null);
+      await registerUserUseCase.execute(currentUser, name, email, password, role);
+      await fetchUsuarios();
+    } catch (err: any) {
+      if (err instanceof AppError) {
+        throw err;
+      }
+      throw new AppError('Erro ao cadastrar novo usuário.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     escalas,
     grupos,
@@ -140,7 +164,8 @@ export function useEscalasViewModel(
     fetchGrupos,
     addGrupo,
     removeGrupo,
-    fetchUsuarios
+    fetchUsuarios,
+    registerUser
   };
 }
 

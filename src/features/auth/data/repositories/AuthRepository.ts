@@ -1,4 +1,5 @@
 import { supabase } from '../../../../main/config/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { IAuthRepository } from '../../domain/repositories/IAuthRepository';
 import { User } from '../../domain/entities/User';
 import { AppError } from '../../../../core/errors/AppError';
@@ -107,6 +108,30 @@ export class AuthRepository implements IAuthRepository {
       email: profile.email || '',
       role: (profile.role as 'admin' | 'user') || 'user'
     }));
+  }
+
+  async registerUser(name: string, email: string, password: string, role: 'admin' | 'user'): Promise<User> {
+    const { data: userId, error } = await supabase.rpc('criar_usuario_admin', {
+      p_email: email,
+      p_password: password,
+      p_nome: name,
+      p_role: role
+    });
+
+    if (error) {
+      throw new AppError(error.message, 400);
+    }
+
+    if (!userId) {
+      throw new AppError('Não foi possível criar o usuário nas credenciais.', 500);
+    }
+
+    return {
+      id: userId,
+      name,
+      email,
+      role
+    };
   }
 }
 

@@ -10,6 +10,7 @@ import { ConfirmarPresencaUseCase } from '../../features/presenca/domain/usecase
 import { useEscalasViewModel } from '../../features/escala/presentation/viewmodels/useEscalasViewModel';
 import { useConfirmarPresencaViewModel } from '../../features/presenca/presentation/viewmodels/useConfirmarPresencaViewModel';
 import { GetUsersUseCase } from '../../features/auth/domain/usecases/GetUsersUseCase';
+import { RegisterUserUseCase } from '../../features/auth/domain/usecases/RegisterUserUseCase';
 import { makeAuthRepository } from './AuthFactory';
 
 const escalaRepository = new EscalaRepository();
@@ -22,6 +23,7 @@ const getGruposUseCase = new GetGruposUseCase(escalaRepository);
 const saveGrupoUseCase = new SaveGrupoUseCase(escalaRepository);
 const deleteGrupoUseCase = new DeleteGrupoUseCase(escalaRepository);
 const getUsersUseCase = new GetUsersUseCase(makeAuthRepository());
+const registerUserUseCase = new RegisterUserUseCase(makeAuthRepository());
 
 const confirmarPresencaUseCase = new ConfirmarPresencaUseCase(presencaRepository);
 
@@ -32,6 +34,7 @@ export const makeGetGruposUseCase = () => getGruposUseCase;
 export const makeSaveGrupoUseCase = () => saveGrupoUseCase;
 export const makeDeleteGrupoUseCase = () => deleteGrupoUseCase;
 export const makeGetUsersUseCase = () => getUsersUseCase;
+export const makeRegisterUserUseCase = () => registerUserUseCase;
 
 export const makeConfirmarPresencaUseCase = () => confirmarPresencaUseCase;
 
@@ -43,7 +46,8 @@ export const makeEscalasViewModel = () => {
     makeGetGruposUseCase(),
     makeSaveGrupoUseCase(),
     makeDeleteGrupoUseCase(),
-    makeGetUsersUseCase()
+    makeGetUsersUseCase(),
+    makeRegisterUserUseCase()
   );
 };
 

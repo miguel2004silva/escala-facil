@@ -1,63 +1,93 @@
-# Escala Fácil
+# Escala Fácil - Documento Técnico e Manual do Sistema
 
-Aplicativo de gestão de escalas ministeriais construído com Expo (React Native), seguindo os princípios de Clean Architecture e padrão MVVM, totalmente integrado com o Supabase.
+Aplicativo de gestão de escalas ministeriais construído com Expo (React Native), seguindo os princípios de Clean Architecture e padrão MVVM, com persistência e comunicação em tempo real integradas ao Supabase.
+
+---
 
 ## 🚀 Tecnologias Utilizadas
 
-- **React Native** & **Expo**
-- **TypeScript**
-- **React Navigation**
+- **React Native** & **Expo** (Core do App)
+- **TypeScript** (Tipagem Estática)
+- **React Navigation** (Navegação Nativa)
 - **Supabase** (Autenticação, Banco de Dados Relacional e Tempo Real)
-- **Linear Gradient** & **Vector Icons**
+- **Expo Notifications** (Serviço de Notificações Locais)
+- **Jest** & **ts-jest** (Testes Automatizados de Regras de Negócio)
 
 ---
 
 ## 🗄️ Estrutura do Banco de Dados (Supabase)
 
-O projeto está totalmente integrado com uma instância em nuvem do **Supabase (PostgreSQL)** em tempo real. A configuração de conexão está localizada em `src/main/config/supabase.ts`.
+O projeto está integrado a uma base de dados relacional **PostgreSQL** no Supabase. O arquivo de configuração de conexão encontra-se em [supabase.ts](file:///c:/Users/migue/Downloads/escala-facil/src/main/config/supabase.ts).
 
-As seguintes tabelas e estruturas são utilizadas para a persistência e relacionamento dos dados:
+### Tabelas do Sistema:
 
-- **`profiles`**: Armazena os perfis dos usuários cadastrados na plataforma. É utilizada para autenticação, controle de permissões (`role`: `admin` ou `user`) e para listar membros reais cadastrados no seletor de escalas.
-- **`escalas`**: Armazena os dados dos eventos criados, incluindo `id` (UUID), `grupo` (nome do ministério), `data` (timestamp com fuso-horário) e `publicada` (booleano que indica se o rascunho já está visível para a equipe).
-- **`membros_escala`**: Tabela associativa que vincula membros a cada escala (`escala_id`). Contém o `id` do usuário vinculado, `nome`, `funcao` (instrumento ou papel desempenhado), `status` (*Pendente*, *Confirmado* ou *Ausente*) e a `justificativa` textual (preenchida caso o membro marque que não pode comparecer).
-- **`grupos`**: Lista de ministérios e grupos cadastrados dinamicamente (ex: Som, Mídia, Vocal, Recepção).
+1. **`profiles`**: Perfis públicos dos usuários criados no Supabase Auth.
+   - Colunas: `id` (UUID, PK), `email` (Text), `nome` (Text), `role` (`'admin'` | `'user'`), `created_at` (Timestamp).
+2. **`escalas`**: Escalas de serviço dos ministérios.
+   - Colunas: `id` (UUID, PK), `grupo` (Text), `data` (Timestamp com fuso-horário), `publicada` (Boolean).
+3. **`membros_escala`**: Relacionamento N:N entre perfis e escalas.
+   - Colunas: `id` (UUID, PK, referência para `profiles.id`), `escala_id` (UUID, FK, referência para `escalas.id`), `nome` (Text), `funcao` (Text), `status` (`'Pendente'` | `'Confirmado'` | `'Ausente'`), `justificativa` (Text, Nullable).
+4. **`grupos`**: Lista de grupos/ministérios cadastrados.
+   - Colunas: `name` (Text, PK).
+5. **`cores_roupa`** [NOVO]: Definição de cores de vestimenta por grupo/culto.
+   - Colunas: `id` (UUID, PK), `grupo` (Text), `data` (Timestamp com fuso-horário), `cor` (Text), `observacao` (Text, Nullable).
 
----
-
-## ⚙️ Funcionalidades Implementadas e Operantes
-
-### 🔑 Autenticação e Perfis (Auth Feature)
-- **Login Reativo:** Autenticação conectada diretamente com a base do Supabase Auth.
-- **Divisão de Perfis:** Distinção entre usuários comuns (`user`) e administradores (`admin`), com redirecionamento de tela automático e controle de acesso a ações administrativas.
-
-### 📅 Gestão de Escalas (Escalas Feature - Admin)
-- **Criação e Edição:** Formulário completo para criar novas escalas ou editar as existentes no Supabase.
-- **Seletor de Membros da Plataforma:** Substituição da inserção textual manual por um seletor suspenso (dropdown) moderno com busca em tempo real que puxa os usuários reais registrados na tabela `profiles`.
-- **Chips de Funções Rápidas:** Tags interativas no formulário para definir funções comuns (Vocal, Violão, Bateria, Som, etc.) com apenas um toque.
-- **Modo Rascunho / Publicada:** Controle para salvar escalas de forma privada (Rascunho) ou torná-las visíveis para a equipe escalada (Publicada).
-- **Gerenciamento de Grupos:** Aba dedicada a adicionar ou remover ministérios/grupos (ex: Som, Mídia, Vocal) dinamicamente.
-
-### 🙋 Confirmação de Presença (Presença Feature - Usuários)
-- **Filtros Inteligentes:** Abas dedicadas a separar escalas em "Pendentes", "Confirmadas" e "Todas".
-- **Respostas Rápidas:** Botões para o membro confirmar a presença ("Confirmar") ou recusar ("Não posso ir") diretamente no card da escala.
-- **Justificativa de Ausência:** Modal para preencher o motivo da recusa, persistindo a justificativa no banco de dados e exibindo-a no card da escala correspondente para visualização imediata do Admin.
-
-### 🎨 Visual e Interface Premium
-- **Estética Moderna:** Paleta de cores moderna inspirada no Tailwind CSS (Indigo, Slate, Emerald, Amber, Red).
-- **Cards de Status Reativos:** Cards com barra lateral colorida indicadora de presença (Verde = Confirmada, Vermelho = Ausente com justificativa exibida, Laranja = Pendente).
-- **Layout Confortável:** Modais com fundos escuros translúcidos (`rgba(17, 24, 39, 0.65)`), cantos arredondados orgânicos (de 20px a 28px) e elevações/sombras de profundidade sutis.
+> [!IMPORTANT]
+> **Script de Migração SQL:** Para criar a nova tabela e configurar o controle de segurança RLS (Row Level Security), execute o script SQL contido no arquivo [migration.sql](file:///c:/Users/migue/Downloads/escala-facil/migration.sql) diretamente no SQL Editor do painel do Supabase.
 
 ---
 
-## 🏗 Documentação Técnica da Arquitetura e Padrões de Projeto
+## ⚙️ Funcionalidades e Arquitetura de Negócio
 
-O projeto utiliza uma arquitetura baseada na junção de **Clean Architecture** e **MVVM** (Model-View-ViewModel):
-- **Repository Pattern:** Abstrai a persistência e busca de dados (localizado em `src/features/[feature]/data/repositories`), facilitando a transição de APIs e bancos.
-- **Use Case Pattern:** Cada regra de negócio individual (ex: `ConfirmarPresencaUseCase`, `GetUsersUseCase`) encapsula uma ação singular.
-- **Dependency Injection (Factories):** Configura a injeção manualmente na camada `src/main/factories` cumprindo a Inversão de Dependências do SOLID.
+### 1. Sistema de Notificações em Tempo Real (Realtime Push)
+Quando um administrador adiciona um membro a uma escala publicada, ou altera uma escala existente de "Rascunho" para "Publicada", o membro escalado recebe uma notificação na barra de tarefas do celular instantaneamente.
+- **Implementação Técnica**: Hook [useNotificationListener.ts](file:///c:/Users/migue/Downloads/escala-facil/src/core/hooks/useNotificationListener.ts) assinado via cliente Realtime Supabase nos canais `membros_escala` (INSERT) e `escalas` (UPDATE). Ao interceptar as mudanças no banco onde o ID do membro coincide com o usuário logado no aparelho, o app solicita permissão no sistema operacional e dispara a notificação local via `expo-notifications`.
 
-Para mais detalhes sobre as camadas e o fluxo de dados, consulte: [Arquitetura e Padrões Completos](./docs/arquitetura.md).
+### 2. Cadastro de Novos Usuários por Administradores (sem Rate Limits)
+O administrador pode registrar novos membros no aplicativo (Nome, E-mail, Senha e Role/Perfil) a partir da aba "Membros".
+- **Implementação Técnica**: Para contornar os limites de requisições de e-mail e cadastro padrão da API de autenticação do Supabase (evitando o erro `email rate limit exceeded`), implementamos uma função SQL no banco de dados (`public.criar_usuario_admin`) configurada com `SECURITY DEFINER` e protegida com validação de administrador. O [AuthRepository.ts](file:///c:/Users/migue/Downloads/escala-facil/src/features/auth/data/repositories/AuthRepository.ts) invoca esta função via `RPC` (`supabase.rpc`), inserindo as credenciais criptografadas em `auth.users`, a identidade correspondente em `auth.identities` e o registro de perfil em `profiles` de forma segura e transacional, com o e-mail marcado como confirmado instantaneamente.
+
+### 3. Aba de Cores das Vestimentas ("Cores")
+Evita desorganização no dia do culto, permitindo que a coordenação defina a cor da roupa que o grupo deve usar.
+- **Implementação Técnica**: Aba integrada no aplicativo carregando dados de `cores_roupa`. Membros comuns visualizam as cores em formato de cartões visuais (com círculos coloridos dinâmicos mapeados a partir dos nomes das cores em português). O administrador tem acesso a um formulário (modal) para criar, editar ou excluir as cores das roupas do culto.
+
+---
+
+## 🔒 Regras de Negócio e Requisitos Técnicos
+
+### 1. Tratamento de Exceções
+Todos os repositórios e casos de uso encapsulam as operações de rede e persistência. Qualquer erro na conexão com o Supabase ou erro inesperado é capturado via blocos `try/catch` e propagado como um `AppError` controlado (evitando crashes inesperados do aplicativo). Na camada de visualização, a UI renderiza uma tela de *fallback* amigável ou exibe alertas claros para o usuário.
+
+### 2. Validação de Dados
+Todas as entradas de dados são rigorosamente validadas no domínio (Use Cases) e na UI antes de serem enviadas ao servidor:
+- **Cadastro de Usuário**: Valida formato de e-mail por expressão regular, obrigatoriedade do nome e tamanho mínimo de senha de 6 caracteres.
+- **Vestimenta**: Valida se o grupo foi selecionado, se o campo de cor não está em branco e se o formato inserido de data/hora é válido.
+- **Escalas**: Impede criação de escalas sem membros ou data vazia.
+
+### 3. Controle Mínimo de Acesso
+A segurança e o controle de papéis são mantidos tanto no aplicativo (bloqueio de visualização de botões administrativos) quanto nas regras dos Use Cases de domínio. A tentativa de invocar métodos de inserção, edição ou exclusão de escalas/cores/usuários sem o perfil `admin` lança uma exceção de acesso negado (Erro 403), além de políticas de Row Level Security (RLS) configuradas nas tabelas do Supabase.
+
+---
+
+## 🧪 Testes Automatizados (Jest)
+
+Implementamos testes automatizados de unidade utilizando o framework **Jest** e **ts-jest** para garantir que as regras de negócio de domínio (validações, acesso e fluxos de dados) permaneçam íntegras.
+
+### Testes Implementados:
+1. **`RegisterUserUseCase.test.ts`** ([Código](file:///c:/Users/migue/Downloads/escala-facil/src/__tests__/RegisterUserUseCase.test.ts)):
+   - Garante que apenas administradores consigam registrar usuários (lança erro 403 para não-admins).
+   - Valida obrigatoriedade de campos, formato de e-mail e restrição de comprimento de senha (erro 400).
+   - Valida que o Use Case repassa os dados corretos para o repositório.
+2. **`SaveCorUseCase.test.ts`** ([Código](file:///c:/Users/migue/Downloads/escala-facil/src/__tests__/SaveCorUseCase.test.ts)):
+   - Garante a restrição de perfil admin para criação de vestimentas.
+   - Valida a obrigatoriedade dos campos de grupo, cor e data.
+   - Verifica se a data fornecida é válida no formato ISO.
+
+### Como Executar os Testes:
+Para rodar a suíte completa de testes automatizados, execute o comando abaixo no terminal da pasta raiz:
+```bash
+npm test
+```
 
 ---
 
@@ -74,40 +104,16 @@ Para mais detalhes sobre as camadas e o fluxo de dados, consulte: [Arquitetura e
    ```
 
 3. **Abra o aplicativo:**
-   - Pressione **`w`** no terminal para rodar a versão web do Expo no navegador.
-   - Pressione **`a`** para abrir no emulador Android instalado.
+   - Pressione **`w`** no terminal para abrir no navegador (Web).
+   - Pressione **`a`** para abrir no emulador Android.
    - Pressione **`i`** para abrir no simulador iOS.
-   - Ou escaneie o código QR com o aplicativo **Expo Go** em seu celular (iOS/Android).
+   - Ou escaneie o QR Code com o aplicativo **Expo Go** em seu celular.
 
 ---
 
-## 🧪 Como Testar os Fluxos da Aplicação
-
-Utilize as seguintes credenciais configuradas na base de dados para validação:
+## 🙋 Credenciais de Teste
 
 | Perfil | E-mail de Teste | Senha de Teste |
 | :--- | :--- | :--- |
 | **Administrador** | `admin@escala.com` | `123456` |
 | **Membro (Usuário)** | `user@escala.com` | `123456` |
-
-### Roteiro de Teste Recomendado:
-
-#### Passo 1: Criando uma Escala (Perfil Admin)
-1. Faça login utilizando as credenciais de **Administrador**.
-2. Clique no botão **Grupos** na barra superior para ver os ministérios cadastrados ou adicionar um novo (ex: "Banda").
-3. Clique em **Nova Escala**:
-   - Selecione um dos grupos clicando na tag.
-   - Insira a data e hora desejadas (use o formato padrão sugerido: `DD/MM/AAAA HH:MM`).
-   - Ative o seletor **Membro Cadastrado**.
-   - Digite no campo de busca do seletor (ex: "Membro") para encontrar o usuário cadastrado correspondente a `user@escala.com` ("Membro Comum").
-   - Selecione o membro, defina sua função (clicando no chip rápido "Violão" ou digitando no campo) e clique em **Inserir na Lista**.
-   - Mantenha o switch **Publicada (Visível)** ativo.
-   - Clique em **Salvar Escala**.
-
-#### Passo 2: Respondendo à Presença (Perfil Membro/User)
-1. Faça logout no botão **Sair** no canto superior direito.
-2. Faça login com as credenciais de **Membro (Usuário)**.
-3. A nova escala aparecerá na listagem sob a aba **Pendentes** e trará a opção de responder.
-4. Teste as ações de presença:
-   - **Caso Confirme:** Clique em **Confirmar**. A barra lateral do card ficará verde imediatamente e o status mudará para "Confirmado".
-   - **Caso Recuse:** Clique em **Não posso ir**. Um modal de justificativa aparecerá. Insira um motivo (ex: "Compromisso familiar") e confirme. A barra lateral do card ficará vermelha e a justificativa será exibida abaixo do nome do membro.

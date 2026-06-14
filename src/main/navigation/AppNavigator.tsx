@@ -6,6 +6,7 @@ import { EscalasScreen } from '../../features/escala/ui/screens/EscalasScreen';
 import { makeAuthRepository } from '../factories/AuthFactory';
 import { ActivityIndicator, View } from 'react-native';
 import { User } from '../../features/auth/domain/entities/User';
+import { useNotificationListener } from '../../core/hooks/useNotificationListener';
 
 const Stack = createNativeStackNavigator();
 
@@ -43,6 +44,9 @@ export function AppNavigator() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const authRepository = useMemo(() => makeAuthRepository(), []);
+
+  // Ativa o ouvinte de notificações em tempo real
+  useNotificationListener(currentUser);
 
   useEffect(() => {
     authRepository.getCurrentUser().then(user => {

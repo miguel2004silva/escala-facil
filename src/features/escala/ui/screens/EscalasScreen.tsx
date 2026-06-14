@@ -11,14 +11,18 @@ import {
   TextInput, 
   ScrollView, 
   Alert, 
-  Switch 
+  Switch,
+  Platform
 } from 'react-native';
 import { colors } from '../../../../theme/colors';
 import { EscalaCard } from '../components/EscalaCard';
 import { User } from '../../../auth/domain/entities/User';
 import { Escala, Membro } from '../../domain/entities/Escala';
 import { makeEscalasViewModel, makeConfirmarPresencaViewModel } from '../../../../main/factories/EscalaFactory';
+import { makeCoresViewModel } from '../../../../main/factories/CoresFactory';
+import { CorRoupa } from '../../../cores/domain/entities/CorRoupa';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../../../../main/config/supabase';
 
 interface EscalasScreenProps {
   currentUser: User;
@@ -29,6 +33,7 @@ export function EscalasScreen({ currentUser, onLogout }: EscalasScreenProps) {
   // Instanciados como hooks estáveis chamados no top level do componente
   const viewModel = makeEscalasViewModel();
   const presencaViewModel = makeConfirmarPresencaViewModel();
+  const coresViewModel = makeCoresViewModel();
   
   const { 
     escalas, 
@@ -44,6 +49,23 @@ export function EscalasScreen({ currentUser, onLogout }: EscalasScreenProps) {
     removeGrupo,
     fetchUsuarios
   } = viewModel;
+
+  const {
+    cores,
+    loading: coresLoading,
+    error: coresError,
+    fetchCores,
+    saveCor,
+    deleteCor
+  } = coresViewModel;
+
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      alert(`${title}: ${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
 
   const [activeFilter, setActiveFilter] = useState<string>('todas');
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
@@ -69,12 +91,66 @@ export function EscalasScreen({ currentUser, onLogout }: EscalasScreenProps) {
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [newMembroRole, setNewMembroRole] = useState('');
 
-  // Carregar dados iniciais
+  // Estados da nova navegação por abas e das novas features
+  const [activeTab, setActiveTab] = useState<'escalas' | 'cores' | 'membros'>('escalas');
+
+  // Form de Cadastro de Usuário
+  const [registerModalVisible, setRegisterModalVisible] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState<'admin' | 'user'>('user');
+  const [registerLoading, setRegisterLoading] = useState(false);
+
+  // Form de Cadastro de Cor de Roupa
+  const [colorModalVisible, setColorModalVisible] = useState(false);
+  const [editingColor, setEditingColor] = useState<CorRoupa | null>(null);
+  const [colorGrupo, setColorGrupo] = useState('');
+  const [colorDataStr, setColorDataStr] = useState('');
+  const [colorCor, setColorCor] = useState('');
+  const [colorObservacao, setColorObservacao] = useState('');
+  const [colorActionLoading, setColorActionLoading] = useState(false);
+
+  // Search na lista de membros (aba de membros)
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+
+  // Carregar dados iniciais e escutar mudanças em tempo real
   useEffect(() => {
     fetchEscalas();
     fetchGrupos();
     fetchUsuarios();
-  }, [fetchEscalas, fetchGrupos, fetchUsuarios]);
+    fetchCores();
+
+    // Inscrição Realtime para atualizar a lista automaticamente
+    const realtimeChannel = supabase
+      .channel('db_ui_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'escalas' },
+        () => {
+          fetchEscalas();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'membros_escala' },
+        () => {
+          fetchEscalas();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'cores_roupa' },
+        () => {
+          fetchCores();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(realtimeChannel);
+    };
+  }, [fetchEscalas, fetchGrupos, fetchUsuarios, fetchCores]);
 
   // Função para pegar as iniciais do usuário
   const getInitials = (name: string) => {
@@ -341,6 +417,490 @@ export function EscalasScreen({ currentUser, onLogout }: EscalasScreenProps) {
     });
   }, [usuarios, escalaMembros, userSearchQuery]);
 
+  const handleRegisterUser = async () => {
+    try {
+      if (!newUserName.trim()) {
+        showAlert('Erro', 'O nome é obrigatório.');
+        return;
+      }
+      if (!newUserEmail.trim()) {
+        showAlert('Erro', 'O e-mail é obrigatório.');
+        return;
+      }
+      if (!newUserPassword) {
+        showAlert('Erro', 'A senha é obrigatória.');
+        return;
+      }
+      if (newUserPassword.length < 6) {
+        showAlert('Erro', 'A senha deve ter pelo menos 6 caracteres.');
+        return;
+      }
+
+      setRegisterLoading(true);
+      await viewModel.registerUser(currentUser, newUserName.trim(), newUserEmail.trim(), newUserPassword, newUserRole);
+      setRegisterModalVisible(false);
+      setNewUserName('');
+      setNewUserEmail('');
+      setNewUserPassword('');
+      setNewUserRole('user');
+      showAlert('Sucesso', 'Novo usuário cadastrado com sucesso!');
+    } catch (err: any) {
+      showAlert('Erro', err.message || 'Erro ao cadastrar usuário.');
+    } finally {
+      setRegisterLoading(false);
+    }
+  };
+
+  const handleNewColor = () => {
+    setEditingColor(null);
+    setColorGrupo(grupos[0] || '');
+    const now = new Date();
+    setColorDataStr(formatDateString(now));
+    setColorCor('');
+    setColorObservacao('');
+    setColorModalVisible(true);
+  };
+
+  const handleEditColor = (color: CorRoupa) => {
+    setEditingColor(color);
+    setColorGrupo(color.grupo);
+    setColorDataStr(formatDateString(new Date(color.data)));
+    setColorCor(color.cor);
+    setColorObservacao(color.observacao || '');
+    setColorModalVisible(true);
+  };
+
+  const handleSaveColor = async () => {
+    try {
+      if (!colorGrupo) {
+        showAlert('Erro', 'Por favor, selecione um grupo.');
+        return;
+      }
+      if (!colorCor.trim()) {
+        showAlert('Erro', 'Por favor, informe a cor da roupa.');
+        return;
+      }
+
+      let parsedDate: Date;
+      try {
+        parsedDate = parseDateString(colorDataStr);
+      } catch (err: any) {
+        showAlert('Erro', err.message || 'Formato de data inválido. Use DD/MM/AAAA HH:MM');
+        return;
+      }
+
+      const colorObj: CorRoupa = {
+        id: editingColor?.id || '',
+        grupo: colorGrupo,
+        data: parsedDate.toISOString(),
+        cor: colorCor.trim(),
+        observacao: colorObservacao.trim() || undefined
+      };
+
+      setColorActionLoading(true);
+      await saveCor(currentUser, colorObj);
+      setColorModalVisible(false);
+      showAlert('Sucesso', editingColor ? 'Cor atualizada!' : 'Cor cadastrada com sucesso!');
+    } catch (err: any) {
+      showAlert('Erro', err.message || 'Erro ao salvar cor.');
+    } finally {
+      setColorActionLoading(false);
+    }
+  };
+
+  const handleDeleteColor = (id: string) => {
+    const performDelete = async () => {
+      try {
+        setColorActionLoading(true);
+        await deleteCor(currentUser, id);
+        showAlert('Sucesso', 'Cor excluída.');
+      } catch (err: any) {
+        showAlert('Erro', err.message || 'Erro ao excluir cor.');
+      } finally {
+        setColorActionLoading(false);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmDelete = window.confirm('Tem certeza que deseja excluir esta cor de roupa?');
+      if (confirmDelete) performDelete();
+    } else {
+      Alert.alert(
+        'Excluir Cor',
+        'Tem certeza que deseja excluir esta cor de roupa?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { 
+            text: 'Excluir', 
+            style: 'destructive',
+            onPress: performDelete
+          }
+        ]
+      );
+    }
+  };
+
+  const searchedMembers = useMemo(() => {
+    return usuarios.filter(u => {
+      if (!memberSearchQuery.trim()) return true;
+      const q = memberSearchQuery.toLowerCase();
+      return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+    });
+  }, [usuarios, memberSearchQuery]);
+
+  // Helper de cores em hexadecimal para círculo visual
+  const getColorHex = (colorName: string): string => {
+    const name = colorName.toLowerCase().trim();
+    const map: Record<string, string> = {
+      'preto': '#1f2937',
+      'branco': '#f3f4f6',
+      'azul': '#2563eb',
+      'azul marinho': '#1e3a8a',
+      'vermelho': '#dc2626',
+      'verde': '#16a34a',
+      'amarelo': '#eab308',
+      'rosa': '#db2777',
+      'roxo': '#9333ea',
+      'cinza': '#4b5563',
+      'marrom': '#78350f',
+      'laranja': '#ea580c',
+      'vinho': '#7f1d1d',
+    };
+    return map[name] || '#6366f1'; // fallback para índigo
+  };
+
+  // Formatador de data e hora amigável
+  const formatIsoDate = (isoString: string): string => {
+    try {
+      const date = new Date(isoString);
+      const d = date.getDate().toString().padStart(2, '0');
+      const m = (date.getMonth() + 1).toString().padStart(2, '0');
+      const y = date.getFullYear();
+      const h = date.getHours().toString().padStart(2, '0');
+      const min = date.getMinutes().toString().padStart(2, '0');
+      return `${d}/${m}/${y} às ${h}:${min}`;
+    } catch {
+      return isoString;
+    }
+  };
+
+  const renderEscalasTab = () => {
+    return (
+      <View style={{ flex: 1 }}>
+        {/* Admin Quick Actions */}
+        {currentUser.role === 'admin' && (
+          <View style={styles.adminActionRow}>
+            <TouchableOpacity 
+              style={[styles.adminHeaderButton, { backgroundColor: colors.primaryLight, borderColor: 'rgba(79, 70, 229, 0.1)' }]}
+              onPress={handleNewEscala}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add-circle-outline" size={18} color={colors.primary} style={{ marginRight: 6 }} />
+              <Text style={[styles.adminHeaderButtonText, { color: colors.primary }]}>Nova Escala</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.adminHeaderButton, { backgroundColor: colors.background, borderColor: colors.border }]}
+              onPress={() => setGrupoModalVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="folder-open-outline" size={18} color={colors.textSecondary} style={{ marginRight: 6 }} />
+              <Text style={[styles.adminHeaderButtonText, { color: colors.textSecondary }]}>Grupos</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Group Badges Filter */}
+        <View style={styles.groupFilterContainer}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.groupFilterScroll}
+          >
+            <TouchableOpacity
+              style={[styles.groupFilterBadge, !selectedGroup && styles.groupFilterBadgeActive]}
+              onPress={() => setSelectedGroup(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.groupFilterText, !selectedGroup && styles.groupFilterTextActive]}>
+                Todos os Grupos
+              </Text>
+            </TouchableOpacity>
+            {grupos.map((g) => {
+              const isSelected = selectedGroup === g;
+              return (
+                <TouchableOpacity
+                  key={g}
+                  style={[styles.groupFilterBadge, isSelected && styles.groupFilterBadgeActive]}
+                  onPress={() => setSelectedGroup(g)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.groupFilterText, isSelected && styles.groupFilterTextActive]}>
+                    {g}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Tabs Filter */}
+        <View style={styles.filterTabs}>
+          {(currentUser.role === 'admin' 
+            ? ['todas', 'rascunhos', 'publicadas'] 
+            : ['todas', 'pendentes', 'confirmadas']
+          ).map((filter) => {
+            const isActive = activeFilter === filter;
+            let label = 'Todas';
+            if (filter === 'pendentes') label = 'Pendentes';
+            if (filter === 'confirmadas') label = 'Confirmadas';
+            if (filter === 'rascunhos') label = 'Rascunhos';
+            if (filter === 'publicadas') label = 'Publicadas';
+
+            return (
+              <TouchableOpacity
+                key={filter}
+                style={[styles.tab, isActive && styles.tabActive]}
+                onPress={() => setActiveFilter(filter)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* List */}
+        {error ? (
+          <View style={styles.centerContainer}>
+            <View style={styles.errorCard}>
+              <Ionicons name="alert-circle" size={48} color={colors.error} />
+              <Text style={styles.errorTitle}>Ops! Algo deu errado</Text>
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={fetchEscalas} activeOpacity={0.8}>
+                <Text style={styles.retryText}>Tentar novamente</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredEscalas}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <EscalaCard 
+                escala={item} 
+                currentUser={currentUser}
+                presencaViewModel={presencaViewModel}
+                onStatusChange={fetchEscalas}
+                onEdit={handleEditEscala}
+                onDelete={handleDeleteEscala}
+                onPublish={handlePublishEscala}
+              />
+            )}
+            contentContainerStyle={styles.listContent}
+            refreshing={loading}
+            onRefresh={fetchEscalas}
+            ListEmptyComponent={
+              !loading ? (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="calendar-outline" size={64} color={colors.textMuted} />
+                  <Text style={styles.emptyTitle}>Nenhuma escala encontrada</Text>
+                  <Text style={styles.emptyText}>
+                    {activeFilter === 'todas'
+                      ? 'Nenhuma escala cadastrada recente.'
+                      : activeFilter === 'pendentes'
+                      ? 'Parabéns! Você respondeu a todas as suas escalas.'
+                      : activeFilter === 'rascunhos'
+                      ? 'Nenhum rascunho de escala salvo.'
+                      : activeFilter === 'publicadas'
+                      ? 'Nenhuma escala publicada encontrada.'
+                      : 'Nenhuma escala encontrada com os filtros selecionados.'}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.centerContainer}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+              )
+            }
+          />
+        )}
+      </View>
+    );
+  };
+
+  const renderCoresTab = () => {
+    return (
+      <View style={{ flex: 1 }}>
+        {/* Admin Quick Action for Cores */}
+        {currentUser.role === 'admin' && (
+          <View style={styles.adminActionRow}>
+            <TouchableOpacity 
+              style={[styles.adminHeaderButton, { backgroundColor: colors.primaryLight, borderColor: 'rgba(79, 70, 229, 0.1)' }]}
+              onPress={handleNewColor}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="shirt-outline" size={18} color={colors.primary} style={{ marginRight: 6 }} />
+              <Text style={[styles.adminHeaderButtonText, { color: colors.primary }]}>Definir Cor de Roupa</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Cores List */}
+        {coresError ? (
+          <View style={styles.centerContainer}>
+            <View style={styles.errorCard}>
+              <Ionicons name="alert-circle" size={48} color={colors.error} />
+              <Text style={styles.errorTitle}>Ops! Algo deu errado</Text>
+              <Text style={styles.errorText}>{coresError}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={fetchCores} activeOpacity={0.8}>
+                <Text style={styles.retryText}>Tentar novamente</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <FlatList
+            data={cores}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            refreshing={coresLoading}
+            onRefresh={fetchCores}
+            renderItem={({ item }) => (
+              <View style={styles.colorCard}>
+                <View style={styles.colorCardHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.colorCardGroup}>{item.grupo}</Text>
+                    <Text style={styles.colorCardDate}>{formatIsoDate(item.data)}</Text>
+                  </View>
+                  {currentUser.role === 'admin' && (
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                      <TouchableOpacity onPress={() => handleEditColor(item)} activeOpacity={0.7}>
+                        <Ionicons name="create-outline" size={20} color={colors.primary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDeleteColor(item.id)} activeOpacity={0.7}>
+                        <Ionicons name="trash-outline" size={20} color={colors.error} />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.colorInfoRow}>
+                  <View style={[styles.colorCircle, { backgroundColor: getColorHex(item.cor) }]} />
+                  <Text style={styles.colorText}>Vestimenta: {item.cor}</Text>
+                </View>
+
+                {item.observacao ? (
+                  <Text style={styles.colorObs}>{item.observacao}</Text>
+                ) : null}
+              </View>
+            )}
+            ListEmptyComponent={
+              !coresLoading ? (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="shirt-outline" size={64} color={colors.textMuted} />
+                  <Text style={styles.emptyTitle}>Nenhuma vestimenta definida</Text>
+                  <Text style={styles.emptyText}>
+                    Nenhuma cor de roupa de culto foi cadastrada no sistema.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.centerContainer}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+              )
+            }
+          />
+        )}
+      </View>
+    );
+  };
+
+  const renderMembrosTab = () => {
+    return (
+      <View style={{ flex: 1 }}>
+        {/* Admin Quick Action for registering new users */}
+        <View style={styles.adminActionRow}>
+          <TouchableOpacity 
+            style={[styles.adminHeaderButton, { backgroundColor: colors.primaryLight, borderColor: 'rgba(79, 70, 229, 0.1)' }]}
+            onPress={() => setRegisterModalVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="person-add-outline" size={18} color={colors.primary} style={{ marginRight: 6 }} />
+            <Text style={[styles.adminHeaderButtonText, { color: colors.primary }]}>Novo Usuário</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Search Bar */}
+        <View style={styles.dropdownSearchWrapper}>
+          <Ionicons name="search-outline" size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
+          <TextInput
+            style={{ flex: 1, fontSize: 14, color: colors.text }}
+            placeholder="Buscar membros..."
+            placeholderTextColor={colors.textMuted}
+            value={memberSearchQuery}
+            onChangeText={setMemberSearchQuery}
+          />
+          {memberSearchQuery ? (
+            <TouchableOpacity onPress={() => setMemberSearchQuery('')}>
+              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {/* Members List */}
+        <FlatList
+          data={searchedMembers}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          refreshing={loading}
+          onRefresh={fetchUsuarios}
+          renderItem={({ item }) => {
+            const colorsPair = getAvatarColor(item.name);
+            return (
+              <View style={styles.userItem}>
+                <View style={[styles.userAvatar, { backgroundColor: colorsPair.bg }]}>
+                  <Text style={[styles.userAvatarText, { color: colorsPair.text }]}>
+                    {getInitials(item.name)}
+                  </Text>
+                </View>
+                <View style={styles.userBody}>
+                  <Text style={styles.userName}>{item.name}</Text>
+                  <Text style={styles.userEmail}>{item.email}</Text>
+                </View>
+                <View style={[
+                  styles.userRoleBadge,
+                  { backgroundColor: item.role === 'admin' ? colors.errorLight : colors.primaryLight }
+                ]}>
+                  <Text style={[
+                    styles.userRoleText,
+                    { color: item.role === 'admin' ? colors.error : colors.primary }
+                  ]}>
+                    {item.role === 'admin' ? 'Admin' : 'Membro'}
+                  </Text>
+                </View>
+              </View>
+            );
+          }}
+          ListEmptyComponent={
+            !loading ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="people-outline" size={64} color={colors.textMuted} />
+                <Text style={styles.emptyTitle}>Nenhum membro encontrado</Text>
+                <Text style={styles.emptyText}>Não há membros cadastrados ou correspondentes à busca.</Text>
+              </View>
+            ) : (
+              <View style={styles.centerContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+              </View>
+            )
+          }
+        />
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
@@ -362,146 +922,42 @@ export function EscalasScreen({ currentUser, onLogout }: EscalasScreenProps) {
         </TouchableOpacity>
       </View>
 
-      {/* Admin Quick Actions */}
-      {currentUser.role === 'admin' && (
-        <View style={styles.adminActionRow}>
-          <TouchableOpacity 
-            style={[styles.adminHeaderButton, { backgroundColor: colors.primaryLight, borderColor: 'rgba(79, 70, 229, 0.1)' }]}
-            onPress={handleNewEscala}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="add-circle-outline" size={18} color={colors.primary} style={{ marginRight: 6 }} />
-            <Text style={[styles.adminHeaderButtonText, { color: colors.primary }]}>Nova Escala</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.adminHeaderButton, { backgroundColor: colors.background, borderColor: colors.border }]}
-            onPress={() => setGrupoModalVisible(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="folder-open-outline" size={18} color={colors.textSecondary} style={{ marginRight: 6 }} />
-            <Text style={[styles.adminHeaderButtonText, { color: colors.textSecondary }]}>Grupos</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* Main Content Area based on selected Tab */}
+      {activeTab === 'escalas' && renderEscalasTab()}
+      {activeTab === 'cores' && renderCoresTab()}
+      {activeTab === 'membros' && currentUser.role === 'admin' && renderMembrosTab()}
 
-      {/* Group Badges Filter */}
-      <View style={styles.groupFilterContainer}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.groupFilterScroll}
+      {/* Bottom Navigation Tabs */}
+      <View style={styles.bottomTabBar}>
+        <TouchableOpacity 
+          style={[styles.bottomTabItem]} 
+          onPress={() => setActiveTab('escalas')}
+          activeOpacity={0.7}
         >
-          <TouchableOpacity
-            style={[styles.groupFilterBadge, !selectedGroup && styles.groupFilterBadgeActive]}
-            onPress={() => setSelectedGroup(null)}
+          <Ionicons name="calendar-outline" size={22} color={activeTab === 'escalas' ? colors.primary : colors.textSecondary} />
+          <Text style={[styles.bottomTabText, activeTab === 'escalas' && styles.bottomTabTextActive]}>Escalas</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.bottomTabItem]} 
+          onPress={() => setActiveTab('cores')}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="shirt-outline" size={22} color={activeTab === 'cores' ? colors.primary : colors.textSecondary} />
+          <Text style={[styles.bottomTabText, activeTab === 'cores' && styles.bottomTabTextActive]}>Cores</Text>
+        </TouchableOpacity>
+
+        {currentUser.role === 'admin' && (
+          <TouchableOpacity 
+            style={[styles.bottomTabItem]} 
+            onPress={() => setActiveTab('membros')}
             activeOpacity={0.7}
           >
-            <Text style={[styles.groupFilterText, !selectedGroup && styles.groupFilterTextActive]}>
-              Todos os Grupos
-            </Text>
+            <Ionicons name="people-outline" size={22} color={activeTab === 'membros' ? colors.primary : colors.textSecondary} />
+            <Text style={[styles.bottomTabText, activeTab === 'membros' && styles.bottomTabTextActive]}>Membros</Text>
           </TouchableOpacity>
-          {grupos.map((g) => {
-            const isSelected = selectedGroup === g;
-            return (
-              <TouchableOpacity
-                key={g}
-                style={[styles.groupFilterBadge, isSelected && styles.groupFilterBadgeActive]}
-                onPress={() => setSelectedGroup(g)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.groupFilterText, isSelected && styles.groupFilterTextActive]}>
-                  {g}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        )}
       </View>
-
-      {/* Tabs Filter */}
-      <View style={styles.filterTabs}>
-        {(currentUser.role === 'admin' 
-          ? ['todas', 'rascunhos', 'publicadas'] 
-          : ['todas', 'pendentes', 'confirmadas']
-        ).map((filter) => {
-          const isActive = activeFilter === filter;
-          let label = 'Todas';
-          if (filter === 'pendentes') label = 'Pendentes';
-          if (filter === 'confirmadas') label = 'Confirmadas';
-          if (filter === 'rascunhos') label = 'Rascunhos';
-          if (filter === 'publicadas') label = 'Publicadas';
-
-          return (
-            <TouchableOpacity
-              key={filter}
-              style={[styles.tab, isActive && styles.tabActive]}
-              onPress={() => setActiveFilter(filter)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                {label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* List */}
-      {error ? (
-        <View style={styles.centerContainer}>
-          <View style={styles.errorCard}>
-            <Ionicons name="alert-circle" size={48} color={colors.error} />
-            <Text style={styles.errorTitle}>Ops! Algo deu errado</Text>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={fetchEscalas} activeOpacity={0.8}>
-              <Text style={styles.retryText}>Tentar novamente</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : (
-        <FlatList
-          data={filteredEscalas}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <EscalaCard 
-              escala={item} 
-              currentUser={currentUser}
-              presencaViewModel={presencaViewModel}
-              onStatusChange={fetchEscalas}
-              onEdit={handleEditEscala}
-              onDelete={handleDeleteEscala}
-              onPublish={handlePublishEscala}
-            />
-          )}
-          contentContainerStyle={styles.listContent}
-          refreshing={loading}
-          onRefresh={fetchEscalas}
-          ListEmptyComponent={
-            !loading ? (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="calendar-outline" size={64} color={colors.textMuted} />
-                <Text style={styles.emptyTitle}>Nenhuma escala encontrada</Text>
-                <Text style={styles.emptyText}>
-                  {activeFilter === 'todas'
-                    ? 'Nenhuma escala cadastrada recente.'
-                    : activeFilter === 'pendentes'
-                    ? 'Parabéns! Você respondeu a todas as suas escalas.'
-                    : activeFilter === 'rascunhos'
-                    ? 'Nenhum rascunho de escala salvo.'
-                    : activeFilter === 'publicadas'
-                    ? 'Nenhuma escala publicada encontrada.'
-                    : 'Nenhuma escala encontrada com os filtros selecionados.'}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-              </View>
-            )
-          }
-        />
-      )}
 
       {/* Modal: Gerenciar Grupos */}
       <Modal
@@ -819,6 +1275,226 @@ export function EscalasScreen({ currentUser, onLogout }: EscalasScreenProps) {
                 activeOpacity={0.7}
               >
                 <Text style={styles.modalButtonTextSubmit}>Salvar Escala</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal: Cadastrar Nova Cor de Roupa */}
+      <Modal
+        visible={colorModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setColorModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%', width: '90%', maxWidth: 450 }]}>
+            <View style={styles.modalHeader}>
+              <View style={[styles.modalIconContainer, { backgroundColor: colors.primaryLight }]}>
+                <Ionicons name="shirt-outline" size={24} color={colors.primary} />
+              </View>
+              <Text style={styles.modalTitle}>
+                {editingColor ? 'Editar Vestimenta' : 'Definir Vestimenta'}
+              </Text>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Selecionar Grupo */}
+              <Text style={styles.fieldLabel}>Grupo / Ministério</Text>
+              <View style={styles.groupSelectContainer}>
+                {grupos.map((g) => {
+                  const isSelected = colorGrupo === g;
+                  return (
+                    <TouchableOpacity
+                      key={g}
+                      style={[styles.groupSelectBadge, isSelected && styles.groupSelectBadgeActive]}
+                      onPress={() => setColorGrupo(g)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.groupSelectText, isSelected && styles.groupSelectTextActive]}>
+                        {g}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                {grupos.length === 0 && (
+                  <Text style={styles.emptyListText}>Crie um grupo primeiro.</Text>
+                )}
+              </View>
+
+              {/* Data e Hora do Culto */}
+              <Text style={styles.fieldLabel}>Data e Hora do Culto (DD/MM/AAAA HH:MM)</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Ex: 23/05/2026 19:30"
+                placeholderTextColor={colors.textMuted}
+                value={colorDataStr}
+                onChangeText={setColorDataStr}
+              />
+
+              {/* Cor da Roupa */}
+              <Text style={styles.fieldLabel}>Cor da Roupa</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Ex: Preto, Azul Marinho, Branco"
+                placeholderTextColor={colors.textMuted}
+                value={colorCor}
+                onChangeText={setColorCor}
+              />
+
+              {/* Sugestões de Cores */}
+              <View style={[styles.chipsContainer, { marginTop: -8, marginBottom: 16 }]}>
+                {['Preto', 'Branco', 'Azul', 'Azul Marinho', 'Vermelho', 'Verde', 'Vinho', 'Cinza'].map((cChip) => (
+                  <TouchableOpacity
+                    key={cChip}
+                    style={[
+                      styles.chip,
+                      colorCor.toLowerCase() === cChip.toLowerCase() && styles.chipActive
+                    ]}
+                    onPress={() => setColorCor(cChip)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.chipText,
+                      colorCor.toLowerCase() === cChip.toLowerCase() && styles.chipTextActive
+                    ]}>
+                      {cChip}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Observação */}
+              <Text style={styles.fieldLabel}>Observações (Opcional)</Text>
+              <TextInput
+                style={[styles.formInput, { height: 80, textAlignVertical: 'top' }]}
+                placeholder="Ex: Detalhes em jeans, casaco escuro, etc."
+                placeholderTextColor={colors.textMuted}
+                multiline={true}
+                value={colorObservacao}
+                onChangeText={setColorObservacao}
+              />
+            </ScrollView>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setColorModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonSubmit]}
+                onPress={handleSaveColor}
+                disabled={colorActionLoading}
+                activeOpacity={0.7}
+              >
+                {colorActionLoading ? (
+                  <ActivityIndicator size="small" color={colors.surface} />
+                ) : (
+                  <Text style={styles.modalButtonTextSubmit}>Salvar Cor</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal: Cadastrar Novo Usuário (Admin) */}
+      <Modal
+        visible={registerModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setRegisterModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%', width: '90%', maxWidth: 450 }]}>
+            <View style={styles.modalHeader}>
+              <View style={[styles.modalIconContainer, { backgroundColor: colors.primaryLight }]}>
+                <Ionicons name="person-add-outline" size={24} color={colors.primary} />
+              </View>
+              <Text style={styles.modalTitle}>Cadastrar Usuário</Text>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Nome Completo */}
+              <Text style={styles.fieldLabel}>Nome Completo</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Ex: João da Silva"
+                placeholderTextColor={colors.textMuted}
+                value={newUserName}
+                onChangeText={setNewUserName}
+              />
+
+              {/* E-mail */}
+              <Text style={styles.fieldLabel}>E-mail</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Ex: joao@gmail.com"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={newUserEmail}
+                onChangeText={setNewUserEmail}
+              />
+
+              {/* Senha */}
+              <Text style={styles.fieldLabel}>Senha (mínimo 6 caracteres)</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Digite a senha temporária"
+                placeholderTextColor={colors.textMuted}
+                secureTextEntry={true}
+                value={newUserPassword}
+                onChangeText={setNewUserPassword}
+              />
+
+              {/* Papel/Perfil (Role) */}
+              <Text style={styles.fieldLabel}>Tipo de Perfil</Text>
+              <View style={styles.groupSelectContainer}>
+                <TouchableOpacity
+                  style={[styles.groupSelectBadge, newUserRole === 'user' && styles.groupSelectBadgeActive]}
+                  onPress={() => setNewUserRole('user')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.groupSelectText, newUserRole === 'user' && styles.groupSelectTextActive]}>
+                    Membro Comum
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.groupSelectBadge, newUserRole === 'admin' && styles.groupSelectBadgeActive]}
+                  onPress={() => setNewUserRole('admin')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.groupSelectText, newUserRole === 'admin' && styles.groupSelectTextActive]}>
+                    Administrador
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setRegisterModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonSubmit]}
+                onPress={handleRegisterUser}
+                disabled={registerLoading}
+                activeOpacity={0.7}
+              >
+                {registerLoading ? (
+                  <ActivityIndicator size="small" color={colors.surface} />
+                ) : (
+                  <Text style={styles.modalButtonTextSubmit}>Cadastrar</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -1483,6 +2159,140 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: colors.surface,
+    fontWeight: 'bold',
+  },
+  bottomTabBar: {
+    flexDirection: 'row',
+    height: 64,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    paddingBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  bottomTabItem: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 8,
+  },
+  bottomTabItemActive: {
+    // Para customizações futuras de ativação
+  },
+  bottomTabText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  bottomTabTextActive: {
+    color: colors.primary,
+    fontWeight: 'bold',
+  },
+  colorCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  colorCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  colorCardGroup: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  colorCardDate: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  colorInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  colorCircle: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  colorText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  colorObs: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 8,
+    backgroundColor: colors.background,
+    padding: 8,
+    borderRadius: 8,
+  },
+  userItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  userAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userAvatarText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  userBody: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  userName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  userEmail: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  userRoleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userRoleText: {
+    fontSize: 10,
     fontWeight: 'bold',
   },
 });

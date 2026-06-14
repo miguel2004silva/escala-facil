@@ -5,4 +5,5 @@ export interface IAuthRepository {
   logout(): Promise<void>;
   getCurrentUser(): Promise<User | null>;
   getUsers(): Promise<User[]>;
+  registerUser(name: string, email: string, password: string, role: 'admin' | 'user'): Promise<User>;
 }
